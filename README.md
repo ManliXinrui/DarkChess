@@ -457,3 +457,152 @@ public abstract class SquareComponent extends JComponent {
     }
 
 }
+
+package controller;
+
+
+import chessComponent.CannonChessComponent;
+import chessComponent.SquareComponent;
+import chessComponent.EmptySlotComponent;
+import model.ChessColor;
+import view.ChessGameFrame;
+import view.Chessboard;
+
+public class ClickController {
+    private final Chessboard chessboard;
+    private SquareComponent first;
+
+    public ClickController(Chessboard chessboard) {
+        this.chessboard = chessboard;
+    }
+
+    public void onClick(SquareComponent squareComponent) {
+        //判断第一次点击
+        if (first == null) {
+            if (handleFirst(squareComponent)) {
+                squareComponent.setSelected(true);
+                first = squareComponent;
+                first.repaint();
+            }
+        } else {
+            if (first == squareComponent) { // 再次点击取消选取
+                squareComponent.setSelected(false);
+                SquareComponent recordFirst = first;
+                first = null;
+                recordFirst.repaint();
+            } else if (handleSecond(squareComponent)) {
+                //repaint in swap chess method.
+                chessboard.swapChessComponents(first, squareComponent);
+                chessboard.clickController.swapPlayer();
+                chessboard.clickController.updatePoints();
+
+                first.setSelected(false);
+                first = null;
+            }
+        }
+    }
+
+
+    /**
+     * @param squareComponent 目标选取的棋子
+     * @return 目标选取的棋子是否与棋盘记录的当前行棋方颜色相同
+     */
+
+    private boolean handleFirst(SquareComponent squareComponent) {
+        if (chessboard.getBlackPoints() >= 60 || chessboard.getRedPoints() >= 60) {
+            return false;
+        }
+        if (!squareComponent.isReversal()) {
+            squareComponent.setReversal(true);
+            System.out.printf("onClick to reverse a chess [%d,%d]\n", squareComponent.getChessboardPoint().getX(), squareComponent.getChessboardPoint().getY());
+            squareComponent.repaint();
+            if (ChessGameFrame.getStatusLabel().getText().equals("INITIAL PLAYER")) {
+                chessboard.clickController.chooseInitialPlayer(chessboard.getChessComponents(), squareComponent);
+                chessboard.setCurrentColor(chessboard.getCurrentColor() == ChessColor.BLACK ? ChessColor.RED : ChessColor.BLACK);
+            } else
+                chessboard.clickController.swapPlayer();
+            chessboard.clickController.updatePoints();
+            return false;
+        }
+        return squareComponent.getChessColor() == chessboard.getCurrentColor();
+    }
+
+    /**
+     * @param squareComponent first棋子目标移动到的棋子second
+     * @return first棋子是否能够移动到second棋子位置
+     */
+
+    private boolean handleSecond(SquareComponent squareComponent) {
+        System.out.println(squareComponent.getName());
+        if (chessboard.getBlackPoints() >= 60 || chessboard.getRedPoints() >= 60) {
+            return false;
+        }
+        //炮可以吃没翻开的棋子
+        if (first instanceof CannonChessComponent) {
+            if (!squareComponent.isReversal()) {
+                if (!(squareComponent instanceof EmptySlotComponent)) {
+                    //炮吃的子是什么颜色，就给相反颜色加分
+                    if (squareComponent.getChessColor() == ChessColor.BLACK) {
+                        chessboard.setRedPoints(squareComponent.getPoint());
+                        ChessGameFrame.getRedHasEatenLabel().setText(ChessGameFrame.getRedHasEatenLabel().getText()+" "+squareComponent.getName());
+                    } else {
+                        chessboard.setBlackPoints(squareComponent.getPoint());
+                        ChessGameFrame.getBlackHasEatenLabel().setText(ChessGameFrame.getBlackHasEatenLabel().getText()+" "+squareComponent.getName());
+                    }
+                    return first.canMoveTo(chessboard.getChessComponents(), squareComponent.getChessboardPoint());
+                }
+            }
+        }//
+        //没翻开或空棋子，进入if
+        if (!squareComponent.isReversal()) {
+            //没翻开且非空棋子不能走
+            if (!(squareComponent instanceof EmptySlotComponent)) {
+                return false;
+            }
+        }
+        boolean isValid = squareComponent.getChessColor() != chessboard.getCurrentColor() &&
+                first.canMoveTo(chessboard.getChessComponents(), squareComponent.getChessboardPoint());
+        if (isValid) {
+            if (squareComponent.getChessColor() == ChessColor.BLACK) {
+                chessboard.setRedPoints(squareComponent.getPoint());
+                ChessGameFrame.getRedHasEatenLabel().setText(ChessGameFrame.getRedHasEatenLabel().getText()+" "+squareComponent.getName());
+            } else {
+                chessboard.setBlackPoints(squareComponent.getPoint());
+                ChessGameFrame.getBlackHasEatenLabel().setText(ChessGameFrame.getBlackHasEatenLabel().getText()+" "+squareComponent.getName());
+            }
+        }
+        return isValid;
+    }
+
+    public void swapPlayer() {
+        chessboard.setCurrentColor(chessboard.getCurrentColor() == ChessColor.BLACK ? ChessColor.RED : ChessColor.BLACK);
+        ChessGameFrame.getStatusLabel().setText(String.format("%s's TURN", chessboard.getCurrentColor().getName()));
+    }
+
+    public void updatePoints() {
+        ChessGameFrame.getBlackPointsLabel().setText(String.format("BLACK's POINTS: %d", chessboard.getBlackPoints()));
+        ChessGameFrame.getRedPointsLabel().setText(String.format("RED's POINTS: %d", chessboard.getRedPoints()));
+        if (chessboard.getBlackPoints() >= 60 || chessboard.getRedPoints() >= 60) {
+            ChessGameFrame.getStatusLabel0().setText(String.format("END! %s WIN!", chessboard.getRedPoints() >= 60 ? "RED" : "BLACK"));
+        }
+    }
+
+    public void chooseInitialPlayer(SquareComponent[][] allChess, SquareComponent firstSquareComponent) {
+        int counter = 0;
+        for (int i = 0; i < allChess.length; i++) {
+            for (int j = 0; j < allChess[i].length; j++) {
+                if (allChess[i][j].isReversal()) counter++;
+            }
+        }
+        if (counter == 1) {
+            System.out.printf("The initial player is %s", firstSquareComponent.getChessColor().getName());
+            if (firstSquareComponent.getChessColor() == ChessColor.RED) {
+                chessboard.setCurrentColor(ChessColor.RED);
+                ChessGameFrame.getStatusLabel().setText(String.format("BLACK's TURN"));
+            } else {
+                chessboard.setCurrentColor(ChessColor.BLACK);
+                ChessGameFrame.getStatusLabel().setText(String.format("RED's TURN"));
+            }
+        }
+    }
+}
